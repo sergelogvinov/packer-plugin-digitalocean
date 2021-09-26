@@ -158,6 +158,55 @@ func waitForActionState(
 	}
 }
 
+// waitForRecoveryMode simply blocks until the droplet has state recovery.
+func waitForRecoveryMode(
+	dropletId int,
+	client *godo.Client, timeout time.Duration) error {
+	done := make(chan struct{})
+	defer close(done)
+
+	result := make(chan error, 1)
+	go func() {
+		attempts := 0
+		for {
+			attempts += 1
+
+			log.Printf("Checking InRecoveryMode property... (attempt: %d)", attempts)
+			droplet, _, err := client.Droplets.Get(context.TODO(), dropletId)
+			if err != nil {
+				result <- err
+				return
+			}
+
+			if droplet.InRecoveryMode {
+				result <- nil
+				return
+			}
+
+			// Wait 3 seconds in between
+			time.Sleep(3 * time.Second)
+
+			// Verify we shouldn't exit
+			select {
+			case <-done:
+				// We finished, so just exit the goroutine
+				return
+			default:
+				// Keep going
+			}
+		}
+	}()
+
+	log.Printf("Waiting for up to %d seconds for event finished", timeout/time.Second)
+	select {
+	case err := <-result:
+		return err
+	case <-time.After(timeout):
+		err := fmt.Errorf("Timeout while waiting to for event finished")
+		return err
+	}
+}
+
 // WaitForImageState simply blocks until the image action is in
 // a state we expect, while eventually timing out.
 func WaitForImageState(

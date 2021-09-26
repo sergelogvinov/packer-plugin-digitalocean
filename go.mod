@@ -2,6 +2,8 @@ module github.com/hashicorp/packer-plugin-digitalocean
 
 go 1.17
 
+replace github.com/digitalocean/godo => github.com/sergelogvinov/godo v1.65.1-0.20210926233808-8dd2643ac98c
+
 require (
 	github.com/aws/aws-sdk-go v1.38.25
 	github.com/digitalocean/godo v1.65.0

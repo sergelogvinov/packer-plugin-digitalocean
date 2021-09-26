@@ -84,6 +84,104 @@ func (s *stepCreateDroplet) Run(ctx context.Context, state multistep.StateBag) m
 	// instance id inside of the provisioners, used in step_provision.
 	state.Put("instance_id", droplet.ID)
 
+	if c.RecoveryMode {
+		ui.Say("Enabling Recovery Mode...")
+		ui.Say("Waiting for droplet to become active...")
+
+		err = waitForDropletState("active", droplet.ID, client, c.StateTimeout)
+		if err != nil {
+			err := fmt.Errorf("Error waiting for droplet to become active: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		// Wait for the droplet to become unlocked for future steps
+		if err = waitForDropletUnlocked(client, droplet.ID, c.StateTimeout); err != nil {
+			// If we get an error the first time, actually report it
+			err := fmt.Errorf("Error powering on droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		ui.Say("Shutting down Droplet...")
+		_, _, err = client.DropletActions.PowerOff(context.TODO(), droplet.ID)
+		if err != nil {
+			err := fmt.Errorf("Error powering off droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		log.Println("Waiting for poweroff event to complete...")
+		err = waitForDropletState("off", droplet.ID, client, c.StateTimeout)
+		if err != nil {
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		// Wait for the droplet to become unlocked for future steps
+		if err = waitForDropletUnlocked(client, droplet.ID, c.StateTimeout); err != nil {
+			// If we get an error the first time, actually report it
+			err := fmt.Errorf("Error powering off droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		_, _, err = client.DropletActions.Recovery(context.TODO(), droplet.ID, true)
+		if err != nil {
+			err := fmt.Errorf("Error switch to rescue mode droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		err = waitForRecoveryMode(droplet.ID, client, c.StateTimeout)
+		if err != nil {
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		// Wait for the droplet to become unlocked for future steps
+		if err = waitForDropletUnlocked(client, droplet.ID, c.StateTimeout); err != nil {
+			// If we get an error the first time, actually report it
+			err := fmt.Errorf("Error rescue mode droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		ui.Say("Start Droplet...")
+		_, _, err = client.DropletActions.PowerOn(context.TODO(), droplet.ID)
+		if err != nil {
+			err := fmt.Errorf("Error powering on droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		log.Println("Waiting for poweron event to complete...")
+		err = waitForDropletState("active", droplet.ID, client, c.StateTimeout)
+		if err != nil {
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+
+		// Wait for the droplet to become unlocked for future steps
+		if err = waitForDropletUnlocked(client, droplet.ID, c.StateTimeout); err != nil {
+			// If we get an error the first time, actually report it
+			err := fmt.Errorf("Error powering on droplet: %s", err)
+			state.Put("error", err)
+			ui.Error(err.Error())
+			return multistep.ActionHalt
+		}
+	}
+
 	return multistep.ActionContinue
 }
 

@@ -99,6 +99,8 @@ type Config struct {
 	// The path to an SSH private key file. When excluded, an SSH key  will be
 	// automatically generated and used to build the image.
 	SSHPrivateKeyFile string `mapstructure:"ssh_private_key_file" required:"false"`
+	// Enable and boot in to the rescue mode
+	RecoveryMode bool `mapstructure:"recovery" required:"false"`
 
 	ctx interpolate.Context
 }
